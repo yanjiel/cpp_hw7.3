@@ -8,28 +8,38 @@
 #include<memory>
 #include<condition_variable>
 #include<mutex>
+#include<ctime>
 
 
 using namespace std;
 
 class shared_future_state {
 public:
-	shared_future_state() :result(0.0), ready(false) {}
+	shared_future_state() :result(0.0), ready(false), initialized(false) {}
 
 	void set_value(double d) {
-		unique_lock<mutex> lk(m);
 		ready = false;
+		unique_lock<mutex> lk(m);
 		result = d;
-		ready = true;
+		//time_t start, finish;
+		//time(&start);
+		//this_thread::sleep_for(std::chrono::seconds(10));//
+		//time(&finish);
+		//cout << "finish in " << difftime(finish, start);//
 		lk.unlock();
+		ready = true;
+		initialized = true;
 		cv.notify_all();
 	}
 
-	bool is_ready() { return ready; }
+	//bool is_ready() { return ready; }
 
 	double get() {
+		if (!initialized) {
+			throw runtime_error("shared_future_state not initalized.");
+		}
 		unique_lock<mutex> lk(m);
-		cv.wait(lk, is_ready());
+		cv.wait(lk, [&] { return ready; });
 		lk.unlock();
 		return result;
 	}
@@ -39,6 +49,7 @@ private:
 	condition_variable cv;
 	double result;
 	bool ready;
+	bool initialized;
 	
 };
 
@@ -49,7 +60,13 @@ public:
 
 	double get() {
 		//InternalState<Result, Type>* state = state_.get();
-		return futstate_sp->get();
+		try {
+			return futstate_sp->get();
+		}
+		catch (exception e) {
+			cout << e.what();
+		}
+		
 	}
 
 	bool valid() const noexcept {}
@@ -90,8 +107,10 @@ double pow_of(int x, int y) { return pow(x, y); }
 
 
 int main() {
-	//my_promise p;
-	//my_future f = p.get_future();
-	//cout << f.get();
+	my_promise p;
+	my_future f = p.get_future();
+	p.set_value(10);
+	//cout << typeid(my_future).name();
+	cout << f.get();
 	return 0;
 }
